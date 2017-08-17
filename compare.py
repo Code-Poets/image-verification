@@ -9,23 +9,21 @@ def findCropWind(imageA, imageB):
 
     smallImage1 = cv2.imread(imageA)
     smallImage = cv2.cvtColor(smallImage1, cv2.COLOR_BGR2GRAY)
-    smallImage = cv2.Canny(smallImage, 50, 200)
+    smallImage = cv2.Canny(smallImage, 0, 0)
     (imgH, imgW) = smallImage.shape[:2]
-    cv2.imshow("Image", smallImage)
 
     bigImage = cv2.imread(imageB)
     bigImage = cv2.cvtColor(bigImage, cv2.COLOR_BGR2GRAY)
 
 
-    edged = cv2.Canny(bigImage, 50, 200)
+    edged = cv2.Canny(bigImage, 0, 0)
+    cv2.imshow("edge", edged)
     result = cv2.matchTemplate(edged, smallImage, cv2.TM_CCOEFF)
     (_, maxVal, _, maxLoc) = cv2.minMaxLoc(result)
 
     clone = np.dstack([edged, edged, edged])
     cv2.rectangle(clone, (maxLoc[0], maxLoc[1]),
                       (maxLoc[0] + imgW, maxLoc[1] + imgH), (0, 0, 255), 2)
-    cv2.imshow("Visualize", clone)
-    cv2.waitKey(0)
 
     found = (maxVal, maxLoc)
 
@@ -34,18 +32,22 @@ def findCropWind(imageA, imageB):
     (endX, endY) = (int((maxLoc[0] + imgW)), int((maxLoc[1] + imgH)))
 
 
-    crop_wind = Image.open(imageB)
-    area = (startX, startY, endX, endY)
-    cropped_img = crop_wind.crop(area)
-    cropped_img.show()
+    crop_wind = cv2.imread(imageB)
+    cropped_img = crop_wind[startY:endY, startX:endX]
 
-    cv2.rectangle(bigImage, (startX, startY), (endX, endY), (0, 0, 255), 2)
+
+    cv2.rectangle(bigImage, (startX, startY), (endX, endY), (0, 0, 255), 3)
     cv2.imshow("Image", bigImage)
     cv2.waitKey(0)
 
-    cropped_img = np.array(cropped_img)
-
-    compare_images(cropped_img, smallImage1, "title")
+    sH, sW = smallImage1.shape[:2]
+    cH, cW = cropped_img.shape[:2]
+    print sH, sW
+    print cH, cW
+    cv2.imshow("image1", smallImage1)
+    cv2.imshow("image", cropped_img)
+    cv2.waitKey(0)
+    compare_images(smallImage1, cropped_img, "title")
 
 
 
@@ -57,8 +59,8 @@ def mse(imageA, imageB):
     return err
 
 def compare_images(imageA, imageB, title):
-    m = mse(rgb2gray(imageA), rgb2gray(imageB))
-    s = ssim(rgb2gray(imageA), rgb2gray(imageB))
+    m = mse(cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY), cv2.cvtColor(imageB, cv2.COLOR_BGR2GRAY))
+    s = ssim(cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY), cv2.cvtColor(imageB, cv2.COLOR_BGR2GRAY))
 
     fig = plt.figure(title)
     plt.suptitle("MSE: %.2f, SSIM: %.10f" % (m, s))
@@ -71,7 +73,7 @@ def compare_images(imageA, imageB, title):
     plt.imshow(imageB)
     plt.axis("off")
 
-    diff = ImageChops.difference(fromArrayToImage(imageA), fromArrayToImage(imageB))
+    diff = cv2.subtract(imageA, imageB)
 
     ax = fig.add_subplot(1, 3, 3)
     plt.imshow(diff)
@@ -86,7 +88,7 @@ def fromArrayToImage(img):
     return Image.fromarray(np.uint8(img))
 
 imB = "cat.jpg"
-imA = "cat2.jpg"
+imA = "cat3.jpg"
 
 findCropWind(imA, imB)
 
