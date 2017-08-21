@@ -16,14 +16,10 @@ def validate_options(options):
     if len(options) == 1:
         image1_path = input("Type path to the image You want to compare(rendered localy): ")
         image1 = Path(image1_path)
-        print(image1, type(image1))
-        print(image1_path, type(image1_path))
-
         if image1.is_file():
             image1 = cv2.imread(image1_path)
         else:
             sys.exit("No such file or directory!")
-
         image2_path = input("Type path to the image You want to compare with the first one: ")
         image2 = Path(image2_path)
         if image2.is_file():
