@@ -4,31 +4,30 @@ import numpy as np
 import cv2
 from skimage.measure import structural_similarity as ssim
 import argparse
+import random
 
-def findCropWindow(imageA, imageB):
-    template = cv2.imread(imageA, cv2.IMREAD_UNCHANGED)
-    templateToCompare = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+def findCropWindow(imageA, imageB, cordH, cordW, sizeH, sizeW):
+    templateToCompare = cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY)
     templateToCompare = cv2.Canny(templateToCompare, 0, 0)
     (imgH, imgW) = templateToCompare.shape[:2]
     if imgH*imgW < 50:
         print ("Too small image. Upload bigger image!")
         exit()
-    bigImage = cv2.imread(imageB, cv2.IMREAD_UNCHANGED)
-    bigImage = cv2.cvtColor(bigImage, cv2.COLOR_BGR2GRAY)
-    edged = cv2.Canny(bigImage, 0, 0)
-    result = cv2.matchTemplate(edged, templateToCompare, cv2.TM_CCOEFF)
-    (_, maxVal, _, maxLoc) = cv2.minMaxLoc(result)
-    print cv2.minMaxLoc(result)
-    (startX, startY) = (int(maxLoc[0]), int(maxLoc[1]))
-    (endX, endY) = (int((maxLoc[0] + imgW)), int((maxLoc[1] + imgH)))
-    crop_wind = cv2.imread(imageB, cv2.IMREAD_UNCHANGED)
-    cropped_img = crop_wind[startY:endY, startX:endX]
-    cv2.rectangle(bigImage, (startX, startY), (endX, endY), (0, 0, 255), 3)
-    similarImages = findAll(imageA, imageB)
-    structualSimilarity, meanSquaredError = compare_images(cropped_img, template)
-    if ((structualSimilarity > 0.99 and similarImages > 0) or structualSimilarity == 1):
-        print ("Image is ok. Structural Similarity is: %.3f. Mean Squared Error is: %.4f. "
-               "Similar Images found in big Image: %.0f" % (structualSimilarity, meanSquaredError, similarImages))
+
+    #if we have big image and have to cut it from inside
+    image = cv2.imread(imageB, cv2.IMREAD_UNCHANGED)
+    cropped_img = image[cordH:cordH+sizeH, cordW:cordW+sizeW]
+    #if we have exactly resolution of image and we dont have to cut it out
+    #from bigger image
+    #image = cv2.imread(imageB, cv.IMREAD_UNCHANGED)
+    cv2.imshow("cropp", cropped_img)
+    cv2.waitKey(0)
+    imagesCorrelation = compare_histograms(cropped_img, imageA)
+    structualSimilarity, meanSquaredError = compare_images(cropped_img, imageA)
+    if (structualSimilarity > 0.99 and imagesCorrelation > 0.99):
+        print ("Image is ok. Structural Similarity is: %.10f. Mean Squared Error is: %.10f. "
+               "Images Correlation is: %.10f. " %
+               (structualSimilarity, meanSquaredError, imagesCorrelation))
     else:
         print ("Can't find similarity in this image. Upload bigger image")
 
@@ -42,33 +41,39 @@ def compare_images(imageA, imageB):
     structualSimilarity = ssim(cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY), cv2.cvtColor(imageB, cv2.COLOR_BGR2GRAY))
     return structualSimilarity, meanSquaredError
 
-def findAll(imgA, imgB):
 
-    bigImage = cv2.imread(imgB)
-    bigImage = cv2.cvtColor(bigImage, cv2.COLOR_BGR2GRAY)
-    template = cv2.imread(imgA,0)
-    w, h = template.shape[::-1]
-    result = cv2.matchTemplate(bigImage, template, cv2.TM_CCOEFF_NORMED)
-    cv2.imwrite('img_gray.png', bigImage)
-    cv2.imwrite('template.png', template)
-    threshold = 0.95
-    loc = np.where(result >= threshold)
-    similarImages = 0
-    for pt in zip(*loc[::-1]):
-        cv2.rectangle(bigImage, pt, (pt[0] + w, pt[1] + h), (0,255,255), 1)
-        similarImages +=1
-        if similarImages > 1000:
-            print("Too small image. Upload bigger image!")
-            exit()
-    cv2.imwrite('res.png', bigImage)
-    return similarImages
+def compare_histograms(imageA, imageB):
 
-parser = argparse.ArgumentParser(description="Image detection")
-parser.add_argument("image", nargs=2, help="Upload images to compare")
-args = parser.parse_args()
+    color = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+    hist_item = 0
+    hist_item1 = 0
+    for ch, col in enumerate(color):
+        hist_item = cv2.calcHist([imageA], [ch], None, [256], [0, 255])
+        hist_item1 = cv2.calcHist([imageB], [ch], None, [256], [0, 255])
+        cv2.normalize(hist_item, hist_item, 0, 255, cv2.NORM_MINMAX)
+        cv2.normalize(hist_item1, hist_item1, 0, 255, cv2.NORM_MINMAX)
+    result = cv2.compareHist(hist_item, hist_item1, cv2.HISTCMP_CORREL)
+    return result
 
-def main():
-    findCropWindow(args.image[0], args.image[1])
+def findRandomWindow(imageA, sizeH, sizeW):
+    original = cv2.imread(imageA, cv2.IMREAD_UNCHANGED)
+    (imgH, imgW) = original.shape[:2]
+    randomH = random.randrange(0, imgH-sizeH)
+    randomW = random.randrange(0, imgW-sizeW)
+    croppedwindow = original[randomH:randomH+sizeH, randomW:randomW+sizeW]
+    return croppedwindow, randomH, randomW, sizeH, sizeW
 
-if __name__ == '__main__':
-    main()
+photo, cordH, cordW, sizeH, sizeW = findRandomWindow("images/cat.png", 10, 10)
+findCropWindow(photo, "images/cat.png", cordH, cordW, sizeH, sizeW)
+
+#parser = argparse.ArgumentParser(description="Image detection")
+#parser.add_argument("image", nargs=2, help="Upload images to compare")
+#args = parser.parse_args()
+
+
+
+#def main():
+#    findCropWindow(args.image[0], args.image[1])
+#
+#if __name__ == '__main__':
+#    main()
