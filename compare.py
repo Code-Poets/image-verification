@@ -1,10 +1,93 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
+import sys
+from pathlib import Path
+from skimage.measure import compare_ssim as ssim
+import matplotlib.pyplot as plt
 import numpy as np
 import cv2
-from skimage.measure import structural_similarity as ssim
-import argparse
 import random
+
+
+class InvalidOption(Exception):
+    pass
+
+
+def validate_options(options):
+    if len(options) == 1:
+        image1_path = input("Type path to the image You want to compare(rendered localy): ")
+        image1 = Path(image1_path)
+        if image1.is_file():
+            image1 = cv2.imread(image1_path)
+        else:
+            sys.exit("No such file or directory!")
+        image2_path = input("Type path to the image You want to compare with the first one: ")
+        image2 = Path(image2_path)
+        if image2.is_file():
+            image2 = cv2.imread(image2_path)
+        else:
+            sys.exit("No such file or directory!")
+        sizeH = int(input("Type the height of the crop image you want to compare: "))
+        if sizeH == 0:
+            sys.exit("You can't type 0 as a height")
+        sizeW = int(input("Type the width of the crop image you want to compare: "))
+        if sizeW == 0:
+            sys.exit("You can't type 0 as a width")
+
+        return(image1, image2, sizeH, sizeW)
+
+    if (len(options) <= 4) or (len(options) >= 6):
+        sys.exit("Type two directories and sizes of crop window or none")
+
+    if len(options) == 5:
+        image1 = Path(options[1])
+        image2 = Path(options[2])
+        sizeH = int(options[3])
+        sizeW = int(options[4])
+
+
+        if (image1.is_file()) and (image2.is_file()):
+            image1 = cv2.imread(options[1])
+            image2 = cv2.imread(options[2])
+        else:
+            sys.exit("One or both files does not exists!")
+        return(image1, image2, sizeH, sizeW)
+
+
+def yes_no(answer):
+    yes = set(['yes','y', 'ye', ''])
+    no = set(['no','n'])
+
+    while True:
+        choice = input(answer).lower()
+        if choice in yes:
+           return True
+        elif choice in no:
+           return False
+        else:
+           print ("Please respond with 'yes' or 'no'\n")
+
+
+def mean_squared_error(imageA, imageB):
+    mse = np.sum((imageA.astype("float") - imageB.astype("float")) ** 2)
+    mse /= float(imageA.shape[0] * imageA.shape[1])
+    return mse
+
+
+def compare_images(imageA, imageB):
+    meanSquaredError = mean_squared_error(cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY), cv2.cvtColor(imageB, cv2.COLOR_BGR2GRAY))
+    structualSimilarity = ssim(cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY), cv2.cvtColor(imageB, cv2.COLOR_BGR2GRAY))
+    return structualSimilarity, meanSquaredError
+
+def findRandomWindow(imageA, imageB, sizeH, sizeW):
+    (imgH, imgW) = imageA.shape[:2]
+    if sizeH > imgH or sizeW > imgW:
+        print("Too small image for this size of crop window")
+        exit()
+    randomH = random.randrange(0, imgH-sizeH)
+    randomW = random.randrange(0, imgW-sizeW)
+    croppedwindow = imageA[randomH:randomH+sizeH, randomW:randomW+sizeW]
+    findCropWindow(croppedwindow, imageB, randomH, randomW, sizeH, sizeW)
 
 def findCropWindow(imageA, imageB, cordH, cordW, sizeH, sizeW):
     templateToCompare = cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY)
@@ -14,14 +97,7 @@ def findCropWindow(imageA, imageB, cordH, cordW, sizeH, sizeW):
         print ("Too small image. Upload bigger image!")
         exit()
 
-    #if we have big image and have to cut it from inside
-    image = cv2.imread(imageB, cv2.IMREAD_UNCHANGED)
-    cropped_img = image[cordH:cordH+sizeH, cordW:cordW+sizeW]
-    #if we have exactly resolution of image and we dont have to cut it out
-    #from bigger image
-    #image = cv2.imread(imageB, cv.IMREAD_UNCHANGED)
-    cv2.imshow("cropp", cropped_img)
-    cv2.waitKey(0)
+    cropped_img = imageB[cordH:cordH+sizeH, cordW:cordW+sizeW]
     imagesCorrelation = compare_histograms(cropped_img, imageA)
     structualSimilarity, meanSquaredError = compare_images(cropped_img, imageA)
     if (structualSimilarity > 0.99 and imagesCorrelation > 0.99):
@@ -30,17 +106,6 @@ def findCropWindow(imageA, imageB, cordH, cordW, sizeH, sizeW):
                (structualSimilarity, meanSquaredError, imagesCorrelation))
     else:
         print ("Can't find similarity in this image. Upload bigger image")
-
-def mse(imageA, imageB):
-    err = np.sum((imageA.astype("float") - imageB.astype("float")) ** 2)
-    err /= float(imageA.shape[0] * imageA.shape[1])
-    return err
-
-def compare_images(imageA, imageB):
-    meanSquaredError = mse(cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY), cv2.cvtColor(imageB, cv2.COLOR_BGR2GRAY))
-    structualSimilarity = ssim(cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY), cv2.cvtColor(imageB, cv2.COLOR_BGR2GRAY))
-    return structualSimilarity, meanSquaredError
-
 
 def compare_histograms(imageA, imageB):
 
@@ -55,25 +120,16 @@ def compare_histograms(imageA, imageB):
     result = cv2.compareHist(hist_item, hist_item1, cv2.HISTCMP_CORREL)
     return result
 
-def findRandomWindow(imageA, sizeH, sizeW):
-    original = cv2.imread(imageA, cv2.IMREAD_UNCHANGED)
-    (imgH, imgW) = original.shape[:2]
-    randomH = random.randrange(0, imgH-sizeH)
-    randomW = random.randrange(0, imgW-sizeW)
-    croppedwindow = original[randomH:randomH+sizeH, randomW:randomW+sizeW]
-    return croppedwindow, randomH, randomW, sizeH, sizeW
-
-photo, cordH, cordW, sizeH, sizeW = findRandomWindow("images/cat.png", 10, 10)
-findCropWindow(photo, "images/cat.png", cordH, cordW, sizeH, sizeW)
-
-#parser = argparse.ArgumentParser(description="Image detection")
-#parser.add_argument("image", nargs=2, help="Upload images to compare")
-#args = parser.parse_args()
 
 
+def main():
+    input_option = validate_options(sys.argv)
+    findRandomWindow(input_option[0], input_option[1], input_option[2], input_option[3])
 
-#def main():
-#    findCropWindow(args.image[0], args.image[1])
-#
-#if __name__ == '__main__':
-#    main()
+
+if __name__ == '__main__':
+    try:
+        main()
+    except InvalidOption as exception:
+        sys.exit(str(exception))
+
